@@ -63,14 +63,36 @@ class MapCanvas(FigureCanvas):
             QMessageBox.critical(self, "오류", f"데이터 로드 실패:\n{e}")
 
     def plot_map(self):
+        # 현재 축의 xlim과 ylim을 저장 (없을 경우 None 처리)
+        xlim, ylim = None, None
+        if self.ax.has_data():
+            xlim = self.ax.get_xlim()
+            ylim = self.ax.get_ylim()
+
         self.ax.clear()
-        # 포인트 플롯
+
+        # 좌표계가 Web Mercator (EPSG:3857)로 변환된 상태에서 포인트 플롯
         self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
+
         # 베이스맵 추가
-        ctx.add_basemap(self.ax, source=ctx.providers.Esri.WorldImagery, zoom=19)
+        try:
+            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=19)
+        except Exception as e:
+            print(f"베이스맵 추가 중 오류 발생: {e}")
+
+        # 확대/축소 상태가 저장된 경우 해당 상태를 복구
+        if xlim and ylim:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+        else:
+            # 데이터가 처음 그려질 때 한 번만 지도의 전체 영역을 설정
+            self.ax.set_xlim(self.gdf.total_bounds[[0, 2]])
+            self.ax.set_ylim(self.gdf.total_bounds[[1, 3]])
+
         self.ax.set_axis_off()
         self.fig.tight_layout()
         self.draw()
+
 
     def highlight_selected_points(self):
         # 기존 포인트 그리기
@@ -95,9 +117,11 @@ class MapCanvas(FigureCanvas):
         longitude, latitude = point_wgs84.geometry.x[0], point_wgs84.geometry.y[0]
 
         if self.is_adding_point:
+            # 포인트 추가 기능 실행
             self.add_point(latitude, longitude)
-            QMessageBox.information(self, "포인트 추가됨", f"경도: {longitude}, 위도: {latitude}의 포인트가 추가되었습니다.")
+            # QMessageBox.information(self, "포인트 추가됨", f"경도: {longitude}, 위도: {latitude}의 포인트가 추가되었습니다.")
         elif self.fill_points_mode:
+            # 두 점 사이를 채우는 기능
             self.fill_points.append((latitude, longitude))
             if len(self.fill_points) == 2:
                 self.fill_between_points(self.fill_points[0], self.fill_points[1])
@@ -132,7 +156,9 @@ class MapCanvas(FigureCanvas):
         # 테이블 및 지도 업데이트
         self.plot_map()  # 지도 업데이트
         self.main_window.update_table(self.df)  # 테이블 업데이트
-        self.is_adding_point = False  # 포인트 추가 모드 종료
+
+        # 포인트 추가 모드 계속 유지
+        # self.is_adding_point = False  # 이 줄을 제거하여 추가 모드 유지
 
     def fill_between_points(self, point1, point2, interval_km=0.0005):
         """
@@ -228,6 +254,11 @@ class MainWindow(QMainWindow):
         self.add_button = QPushButton("포인트 추가")
         self.add_button.clicked.connect(self.enable_add_point)
         self.left_layout.addWidget(self.add_button)
+
+        # 포인트 추가 모드 종료 버튼
+        self.cancel_add_button = QPushButton("포인트 추가 모드 종료")
+        self.cancel_add_button.clicked.connect(self.disable_add_point)
+        self.left_layout.addWidget(self.cancel_add_button)
 
         # 포인트 간격 채우기 버튼
         self.fill_button = QPushButton("포인트 간격 채우기")
@@ -343,6 +374,11 @@ class MainWindow(QMainWindow):
         # 포인트 추가 모드를 활성화
         self.canvas.is_adding_point = True
         QMessageBox.information(self, "포인트 추가", "지도에서 포인트를 추가하려면 클릭하세요.")
+    
+    def disable_add_point(self):
+        # 포인트 추가 모드를 비활성화
+        self.canvas.is_adding_point = False
+        QMessageBox.information(self, "포인트 추가 모드 종료", "포인트 추가 모드가 종료되었습니다.")
 
     def enable_fill_points(self):
         # 포인트 간격 채우기 모드를 활성화

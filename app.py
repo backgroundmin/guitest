@@ -29,12 +29,12 @@ class MapCanvas(FigureCanvas):
             # CSV 로드
             self.df = pd.read_csv(file_path)
 
-            # 필요한 컬럼 확인 ('longitude'와 'latitude'가 맞는지 확인)
-            if not {'latitude', 'longitude'}.issubset(self.df.columns):
-                raise ValueError("CSV에는 'longitude'와 'latitude' 컬럼이 포함되어 있어야 합니다.")
+            # 필요한 컬럼 확인 ('longitude'와 'llatitude'가 맞는지 확인)
+            if not {'llatitude', 'longitude'}.issubset(self.df.columns):
+                raise ValueError("CSV에는 'longitude'와 'llatitude' 컬럼이 포함되어 있어야 합니다.")
 
             # GeoDataFrame으로 변환
-            geometry = [Point(xy) for xy in zip(self.df['longitude'], self.df['latitude'])]
+            geometry = [Point(xy) for xy in zip(self.df['longitude'], self.df['llatitude'])]
             self.gdf = gpd.GeoDataFrame(self.df, geometry=geometry)
 
             # CRS 설정 (WGS84)
@@ -56,8 +56,8 @@ class MapCanvas(FigureCanvas):
         self.ax.clear()
         # 포인트 플롯
         self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
-        # 베이스맵 추가
-        ctx.add_basemap(self.ax, source=ctx.providers.Esri.WorldImagery, zoom=18)
+        # 베이스맵 추가 (Esri 위성지도)
+        ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=19)
         self.ax.set_axis_off()
         self.fig.tight_layout()
         self.draw()
