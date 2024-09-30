@@ -62,7 +62,7 @@ class MapCanvas(FigureCanvas):
         self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
 
         # NASA GIBS 타일 좌표 계산
-        zoom_level = 12
+        zoom_level = 18
 
         # 중심 좌표 계산 (gdf의 중앙에 있는 포인트를 사용)
         center_x, center_y = self.gdf.geometry.x.mean(), self.gdf.geometry.y.mean()
