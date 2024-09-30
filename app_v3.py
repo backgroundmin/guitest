@@ -16,6 +16,8 @@ from matplotlib.figure import Figure
 
 # geopy 임포트
 from geopy.distance import geodesic
+import contextily as ctx
+
 
 class MapCanvas(FigureCanvas):
     def __init__(self, main_window, parent=None):
@@ -62,6 +64,36 @@ class MapCanvas(FigureCanvas):
         except Exception as e:
             QMessageBox.critical(self, "오류", f"데이터 로드 실패:\n{e}")
 
+    # def plot_map(self):
+    #     # 현재 축의 xlim과 ylim을 저장 (없을 경우 None 처리)
+    #     xlim, ylim = None, None
+    #     if self.ax.has_data():
+    #         xlim = self.ax.get_xlim()
+    #         ylim = self.ax.get_ylim()
+
+    #     self.ax.clear()
+
+    #     # 좌표계가 Web Mercator (EPSG:3857)로 변환된 상태에서 포인트 플롯
+    #     self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
+
+    #     # 베이스맵 추가
+    #     try:
+    #         ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=19)
+    #     except Exception as e:
+    #         print(f"베이스맵 추가 중 오류 발생: {e}")
+
+    #     # 확대/축소 상태가 저장된 경우 해당 상태를 복구
+    #     if xlim and ylim:
+    #         self.ax.set_xlim(xlim)
+    #         self.ax.set_ylim(ylim)
+    #     else:
+    #         # 데이터가 처음 그려질 때 한 번만 지도의 전체 영역을 설정
+    #         self.ax.set_xlim(self.gdf.total_bounds[[0, 2]])
+    #         self.ax.set_ylim(self.gdf.total_bounds[[1, 3]])
+
+    #     self.ax.set_axis_off()
+    #     self.fig.tight_layout()
+    #     self.draw()
     def plot_map(self):
         # 현재 축의 xlim과 ylim을 저장 (없을 경우 None 처리)
         xlim, ylim = None, None
@@ -74,11 +106,21 @@ class MapCanvas(FigureCanvas):
         # 좌표계가 Web Mercator (EPSG:3857)로 변환된 상태에서 포인트 플롯
         self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
 
+        # Google Satellite 타일 URL
+        google_tiles_url = "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+        
         # 베이스맵 추가
         try:
-            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=19)
+            # 구글 타일을 우선 시도
+            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=google_tiles_url, zoom=20)
         except Exception as e:
-            print(f"베이스맵 추가 중 오류 발생: {e}")
+            print(f"Google 타일 추가 중 오류 발생: {e}")
+            print("대체 맵 Esri.WorldImagery로 전환합니다.")
+            try:
+                # Esri 타일로 대체
+                ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=18)
+            except Exception as esri_error:
+                print(f"Esri.WorldImagery 타일 추가 중 오류 발생: {esri_error}")
 
         # 확대/축소 상태가 저장된 경우 해당 상태를 복구
         if xlim and ylim:
@@ -92,7 +134,6 @@ class MapCanvas(FigureCanvas):
         self.ax.set_axis_off()
         self.fig.tight_layout()
         self.draw()
-
 
     def highlight_selected_points(self):
         # 기존 포인트 그리기
