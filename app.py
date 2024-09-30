@@ -55,58 +55,53 @@ class MapCanvas(FigureCanvas):
         except Exception as e:
             QMessageBox.critical(self, "오류", f"데이터 로드 실패:\n{e}")
 
-    def plot_map(self):
-        self.ax.clear()
+def plot_map(self):
+    self.ax.clear()
 
-        # 포인트 플롯
-        self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
+    # 포인트 플롯
+    self.gdf.plot(ax=self.ax, marker='o', color='blue', markersize=5, alpha=0.7)
 
-        # NASA GIBS 타일 좌표 계산
-        zoom_level = 18
+    # NASA GIBS 타일 좌표 계산
+    zoom_level = 18
 
-        # 중심 좌표 계산 (gdf의 중앙에 있는 포인트를 사용)
-        center_x, center_y = self.gdf.geometry.x.mean(), self.gdf.geometry.y.mean()
-        
-        # Web Mercator 좌표를 경도, 위도로 변환 (반환 순서 주의: 위도, 경도 순서로 반환)
-        transformer = Transformer.from_crs("EPSG:3857", "EPSG:4326")
-        lat, lon = transformer.transform(center_x, center_y)  # 순서 변경: x -> lat, y -> lon
-        
-        # 변환된 경도와 위도가 유효한 범위에 있는지 확인
-        if not (-180 <= lon <= 180 and -85 <= lat <= 85):
-            print(f"Invalid coordinates: lon={lon}, lat={lat}")
-            return  # 좌표가 유효하지 않으면 타일을 불러오지 않음
-        
-        # 타일 좌표 계산
+    # 중심 좌표 계산 (gdf의 중앙에 있는 포인트를 사용)
+    center_lon, center_lat = self.gdf.geometry.x.mean(), self.gdf.geometry.y.mean()
+    
+    # Web Mercator 좌표를 경도, 위도로 변환
+    transformer = Transformer.from_crs("EPSG:3857", "EPSG:4326")
+    lon, lat = transformer.transform(center_lon, center_lat)
+    
+    # 변환된 경도와 위도가 유효한 범위에 있는지 확인
+    if not (-180 <= lon <= 180 and -85 <= lat <= 85):
+        print(f"Invalid coordinates: lon={lon}, lat={lat}")
+        return  # 좌표가 유효하지 않으면 타일을 불러오지 않음
+    
+    # 타일 좌표 계산
+    try:
+        x_tile, y_tile = lonlat_to_tile_coords(lon, lat, zoom_level)
+    except Exception as e:
+        print(f"Error calculating tile coordinates: {e}")
+        return
+    
+    # NASA GIBS 타일 URL 생성
+    nasa_gibs_tiles_url = f"https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CorrectedReflectance_TrueColor/default/2024-09-01/{zoom_level}/{y_tile}/{x_tile}.jpg"
+
+    # NASA GIBS 베이스맵 추가
+    try:
+        ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=nasa_gibs_tiles_url, zoom=zoom_level)
+    except Exception as e:
+        print(f"NASA GIBS 타일 추가 중 오류 발생: {e}")
+        print("대체 맵 Esri.WorldImagery로 전환합니다.")
         try:
-            x_tile, y_tile = lonlat_to_tile_coords(lon, lat, zoom_level)
-            print(f"Calculated tile coordinates: x={x_tile}, y={y_tile}")
-        except Exception as e:
-            print(f"Error calculating tile coordinates: {e}")
-            return
-        
-        # NASA GIBS 타일 URL 생성
-        try:
-            nasa_gibs_tiles_url = f"https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CorrectedReflectance_TrueColor/default/2024-09-01/{zoom_level}/{y_tile}/{x_tile}.jpg"
-            print(f"Generated NASA GIBS tile URL: {nasa_gibs_tiles_url}")
-        except Exception as e:
-            print(f"Error generating NASA GIBS tile URL: {e}")
-            return
+            # Esri 타일로 대체
+            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=zoom_level)
+        except Exception as esri_error:
+            print(f"Esri.WorldImagery 타일 추가 중 오류 발생: {esri_error}")
 
-        # NASA GIBS 베이스맵 추가
-        try:
-            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=nasa_gibs_tiles_url, zoom=zoom_level)
-        except Exception as e:
-            print(f"NASA GIBS 타일 추가 중 오류 발생: {e}")
-            print("대체 맵 Esri.WorldImagery로 전환합니다.")
-            try:
-                # Esri 타일로 대체
-                ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=ctx.providers.Esri.WorldImagery, zoom=zoom_level)
-            except Exception as esri_error:
-                print(f"Esri.WorldImagery 타일 추가 중 오류 발생: {esri_error}")
+    self.ax.set_axis_off()
+    self.fig.tight_layout()
+    self.draw()
 
-        self.ax.set_axis_off()
-        self.fig.tight_layout()
-        self.draw()
 
     def highlight_selected_points(self):
         # 기존 포인트 그리기
