@@ -83,7 +83,7 @@ class MapCanvas(FigureCanvas):
         # 베이스맵 추가
         try:
             # 구글 타일을 우선 시도
-            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=google_tiles_url, zoom=20)
+            ctx.add_basemap(self.ax, crs=self.gdf.crs.to_string(), source=google_tiles_url, zoom=21)
         except Exception as e:
             print(f"Google 타일 추가 중 오류 발생: {e}")
             print("대체 맵 Esri.WorldImagery로 전환합니다.")
