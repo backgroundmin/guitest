@@ -18,10 +18,10 @@ from matplotlib.figure import Figure
 from geopy.distance import geodesic
 import contextily as ctx
 import utm
+from shapely.affinity import translate
 
 # UTM 간소화
 from functools import lru_cache
-
 
 # 캐싱을 이용한 UTM 변환
 @lru_cache(maxsize=None)
@@ -253,14 +253,17 @@ class MapCanvas(FigureCanvas):
         self.plot_map()
         self.main_window.update_table(self.df)
 
-    ### 변경됨: 포인트 이동 기능 추가
+        ### 변경됨: 포인트 이동 기능 추가
     def move_points(self, direction, distance_cm):
         """
-        direction: 'east', 'west', 'north', 'south'
-        distance_cm: 이동할 거리 (cm 단위)
+        선택된 포인트들만 지정된 방향으로 주어진 거리만큼 이동시킵니다.
+
+        Parameters:
+        - direction: 'east', 'west', 'north', 'south'
+        - distance_cm: 이동할 거리 (cm 단위)
         """
-        if self.gdf is None or self.gdf.empty:
-            QMessageBox.warning(self.main_window, "경고", "이동할 포인트가 없습니다.")
+        if not self.selected_points:
+            QMessageBox.warning(self.main_window, "경고", "이동할 포인트가 선택되지 않았습니다.")
             return
 
         # cm를 미터로 변환
@@ -283,28 +286,47 @@ class MapCanvas(FigureCanvas):
             QMessageBox.warning(self.main_window, "경고", "올바른 방향을 지정하세요.")
             return
 
-        # 좌표계가 EPSG:3857 (Web Mercator)인 상태에서 이동
-        self.gdf.geometry = self.gdf.translate(xoff=delta_x, yoff=delta_y)
+        # 선택된 포인트들만 이동
+        for idx in self.selected_points:
+            original_geometry = self.gdf.at[idx, 'geometry']
+            translated_geometry = translate(original_geometry, xoff=delta_x, yoff=delta_y)
+            self.gdf.at[idx, 'geometry'] = translated_geometry
 
         # WGS84 좌표계로 변환하여 latitude와 longitude 업데이트
         gdf_wgs84 = self.gdf.to_crs(epsg=4326)
-        self.df['longitude'] = gdf_wgs84.geometry.x
-        self.df['latitude'] = gdf_wgs84.geometry.y
 
-        # UTM 좌표 업데이트
-        utm_results = self.df.apply(lambda row: utm.from_latlon(row['latitude'], row['longitude']), axis=1)
-        self.df['utm_easting'] = utm_results.apply(lambda x: x[0])
-        self.df['utm_northing'] = utm_results.apply(lambda x: x[1])
-        self.df['utm_zone_number'] = utm_results.apply(lambda x: f"{x[2]}{x[3]}")
+        # DataFrame (`df`) 업데이트
+        for idx in self.selected_points:
+            longitude = gdf_wgs84.at[idx, 'geometry'].x
+            latitude = gdf_wgs84.at[idx, 'geometry'].y
+            self.df.at[idx, 'longitude'] = longitude
+            self.df.at[idx, 'latitude'] = latitude
+
+            # UTM 좌표로 변환 (캐싱 사용)
+            utm_easting, utm_northing, utm_zone_number, utm_zone_letter = convert_to_utm(latitude, longitude)
+
+            # UTM 좌표와 존 넘버 업데이트
+            self.df.at[idx, 'utm_easting'] = utm_easting
+            self.df.at[idx, 'utm_northing'] = utm_northing
+            self.df.at[idx, 'utm_zone_number'] = f"{utm_zone_number}{utm_zone_letter}"
 
         # KDTree 재생성
-        coords = list(zip(self.gdf.geometry.x, self.gdf.geometry.y))
-        self.tree = KDTree(coords)
+        if not self.gdf.empty:
+            coords = list(zip(self.gdf.geometry.x, self.gdf.geometry.y))
+            self.tree = KDTree(coords)
+        else:
+            self.tree = None
 
         # 지도 및 테이블 업데이트
         self.plot_map()
         self.main_window.update_table(self.df)
-    ### 변경됨 끝
+
+        # 사용자에게 이동 완료 알림
+        QMessageBox.information(
+            self.main_window, 
+            "포인트 이동 완료", 
+            f"{len(self.selected_points)}개의 선택된 포인트가 {direction}으로 {distance_cm}cm 이동되었습니다."
+        )
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -361,6 +383,11 @@ class MainWindow(QMainWindow):
 
         # 방향 버튼 레이아웃
         self.direction_layout = QHBoxLayout()
+
+        # 전체 선택 버튼 추가
+        self.select_all_button = QPushButton("전체 선택")
+        self.select_all_button.clicked.connect(self.select_all_points)
+        self.direction_layout.addWidget(self.select_all_button)
 
         # 동쪽 이동 버튼
         self.east_button = QPushButton("동")
@@ -432,6 +459,24 @@ class MainWindow(QMainWindow):
 
         # 캔버스 클릭 이벤트 연결
         self.canvas.mpl_connect('button_press_event', self.canvas.on_click)
+
+    ### 추가된 부분: 전체 선택 버튼의 슬롯 함수
+    def select_all_points(self):
+        """
+        테이블의 모든 포인트를 선택합니다.
+        """
+        if self.table.rowCount() == 0:
+            QMessageBox.warning(self, "경고", "선택할 포인트가 없습니다.")
+            return
+
+        # 모든 행 선택
+        self.table.selectAll()
+
+        # 선택된 포인트를 업데이트
+        self.canvas.selected_points = list(range(self.table.rowCount()))
+        self.canvas.highlight_selected_points()
+
+        QMessageBox.information(self, "전체 선택", f"{self.table.rowCount()}개의 포인트가 선택되었습니다.")
 
     def load_csv(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -505,7 +550,6 @@ class MainWindow(QMainWindow):
         self.canvas.fill_points = []
         QMessageBox.information(self, "포인트 간격 채우기", "지도에서 두 점을 클릭하여 포인트를 채우세요.")
 
-    ### 변경됨: 포인트 이동 함수 추가
     def move_points(self, direction):
         # 이동 거리 가져오기
         distance_cm_text = self.distance_input.text()
