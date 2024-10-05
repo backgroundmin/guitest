@@ -1,11 +1,11 @@
 import pandas as pd
 
-file_2_path = '/mnt/data/merge_waypoint_no_parking_v1.csv'
-output_path = '/mnt/data/converted_file.csv'
+file_2_path = './mando_contest/waypoint/last/pp_last_v1.csv'
+output_path = './mando_contest/waypoint/last/tmp/pp_last_v1.csv'
 df2 = pd.read_csv(file_2_path)  # 두 번째 파일 (변환 대상)
 
 # 두 번째 파일에서 불필요한 열을 제거 ('seq', 'option', 기타 불필요한 열)
-df2_modified = df2.drop(columns=['seq', 'option', 'Unnamed: 6', 'Unnamed: 7'])
+df2_modified = df2.drop(columns=['seq', 'option'])
 
 # 열 이름 변경: 'latitude_utm' -> 'utm_easting', 'longitude_utm' -> 'utm_northing'
 df2_modified = df2_modified.rename(columns={

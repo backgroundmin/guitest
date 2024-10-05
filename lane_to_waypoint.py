@@ -1,8 +1,8 @@
 import pandas as pd
 
 # 첫 번째와 두 번째 파일의 경로를 지정합니다.
-file_1_path = '/mnt/data/modified_pp_0_final (2).csv'
-output_path = '/mnt/data/modified_file.csv'
+file_1_path = './mando_contest/waypoint/last/tmp/t_last_v1.csv'
+output_path = './mando_contest/waypoint/last/t_last_v1.csv'
 
 # 파일을 읽어옵니다.
 df1 = pd.read_csv(file_1_path)

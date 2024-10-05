@@ -22,8 +22,8 @@ def convert_utm_to_latlon_in_csv(file_path, output_dir):
     print(f"File saved as {output_file_path}")
 
 # 작업할 디렉토리 경로 설정
-directory = './utm/dcu/waypoint/T_parking'  # 실제 경로로 변경하세요
-output_directory = './utm/dcu/waypoint/T_parking/converted'  # 변환된 파일을 저장할 디렉토리 경로
+directory = './mando_contest/waypoint/last'  # 실제 경로로 변경하세요
+output_directory = './mando_contest/waypoint/last'  # 변환된 파일을 저장할 디렉토리 경로
 
 # 출력 디렉토리가 없는 경우 생성
 if not os.path.exists(output_directory):
